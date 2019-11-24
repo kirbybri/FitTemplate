@@ -4,6 +4,7 @@
 #include <sstream>
 #include <cstdlib>
 #include <ctime>
+#include <unistd.h>
 using namespace std;
 
 #include "TROOT.h"
@@ -12,6 +13,10 @@ using namespace std;
 #include "TFile.h"
 #include "TString.h"
 #include "TSystem.h"
+#include "TCanvas.h"
+#include "TGraph.h"
+#include "TImage.h"
+
 #include "FitTemplateWf.hxx"
 
 //global TApplication object declared here for simplicity
@@ -27,6 +32,10 @@ class Analyze {
   //Files
 
   //data objects
+  TCanvas* c0;
+  TGraph* gFit_result;
+  TGraph* gFit_data;
+  TImage *img;
 
   //Fit objects
   FitTemplateWf *tempFit;
@@ -51,12 +60,21 @@ Analyze::Analyze(){
   fit_offset = 0;
   fit_pulseStartTime = 0;
   fit_amp = 0;
+  //data objects
+  c0 = new TCanvas("c0", "c0",1200,600);
+  gFit_result = new TGraph();
+  gFit_data = new TGraph();
+  img = TImage::Create();
   //fit objects	
   tempFit = new FitTemplateWf();
 }
 
 Analyze::~Analyze(){
+  delete c0;
   delete tempFit;
+  delete gFit_result;
+  delete gFit_data;
+  delete img;
 }
 
 void Analyze::doAnalysis(){
@@ -121,6 +139,39 @@ void Analyze::doAnalysis(){
   fit_offset = tempFit->fitVals[0];
   fit_pulseStartTime = tempFit->fitVals[1];
   fit_amp = tempFit->fitVals[2];
+
+  return;
+
+  //draw result
+  for(unsigned int s = 0 ; s < tempFit->fitData_vals.size() ; s++ ){
+    samp = tempFit->fitData_vals[s];
+    gFit_data->SetPoint( s, s , samp);
+  }
+
+  for(unsigned int s = 0 ; s < tempFit->fitData_vals.size() ; s++ ){
+    for( unsigned int frac = 0 ; frac < 100 ; frac++ ){
+      double time = s + frac/100.;
+      double fitVal = 0;
+      tempFit->tempData->getSignalValue(time, fit_offset, fit_pulseStartTime, fit_amp,fitVal);
+      gFit_result->SetPoint( gFit_result->GetN(), time , fitVal);
+    }
+  }
+
+
+  gFit_data->SetMarkerStyle(21);
+  gFit_result->SetLineColor(kRed);
+
+  c0->Clear();
+  gFit_data->Draw("AP");
+  gFit_result->Draw("L");
+  c0->Modified();
+  c0->Update();
+
+  img->FromPad(c0);
+  img->WriteImage("atb_fitImage.png");
+
+  usleep(1000*1000);
+  return;
 }
 
 void Analyze::printResults(){
@@ -141,7 +192,7 @@ int main(int argc, char *argv[]){
   }
 
   //define ROOT application object
-  theApp = new TApplication("App", &argc, argv);
+  //theApp = new TApplication("App", &argc, argv);
   process(); 
 
   //return 1;
